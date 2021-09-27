@@ -330,11 +330,11 @@ class AIPlayer(Player):
                 depth2Nodes.append(depth2Node)
                 depth3Moves = listAllLegalMoves(depth2Node["state"])
 
-            # Add all second moves.
-            for move3 in depth3Moves:
-                depth3State = getNextStateAdversarial(depth1State, move3)
-                depth3Node = self.createNode(move3, depth3State, depth1State)
-                depth3Nodes.append(depth3Node)
+                # Add all second moves.
+                for move3 in depth3Moves:
+                    depth3State = getNextStateAdversarial(depth1State, move3)
+                    depth3Node = self.createNode(move3, depth3State, depth1State)
+                    depth3Nodes.append(depth3Node)
 
         return None
 
