@@ -87,6 +87,7 @@ class AIPlayer(Player):
             if approxDist(myQueen.coords, enemyAnt.coords) == 1:
                 moves = 1000000000000
 
+        #gonna have to change this to more of a hw 2a utility function
         return moves
 
     # getCombatDistanceWeightAdjustment
@@ -301,6 +302,10 @@ class AIPlayer(Player):
     #Return: The Move to be made
     ##
     def getMove(self, currentState):
+
+        #create a node object with a move, current state, eval, parent,
+        #   children, minimax value
+        #   may need to eventually add in a part for alpha-beta pruning
         root = {
             "moveToReach": None,
             "state": currentState,
@@ -311,6 +316,7 @@ class AIPlayer(Player):
             "minimaxValue": 0
         }
 
+        # list of nodes at specific depth
         depth1Nodes = []
         depth2Nodes = []
         depth3Nodes = []
@@ -321,6 +327,9 @@ class AIPlayer(Player):
         # Get all possible first moves.
         firstPossibleMoves = listAllLegalMoves(currentState)
 
+        #for each move in the list of the first possible moves
+        #   create a new state of the move that was taking
+        #   and add that to the children
         for move in firstPossibleMoves:
             depth1State = getNextStateAdversarial(currentState, move)
             depth1Node = self.createNode(move, depth1State, root)
