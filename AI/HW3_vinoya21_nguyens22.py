@@ -207,9 +207,6 @@ class AIPlayer(Player):
     ##
     def getAntWeightAdjustment(self, myAnts, myCombatAnts, enemyAnts, enemyCombatAnts):
         adjustment = (len(enemyAnts) - len(myCombatAnts))*5
-
-        
-
         return adjustment
 
     # bestMove
@@ -291,19 +288,18 @@ class AIPlayer(Player):
             return moves
         else:
             return [(0, 0)]
-    
+
     ##
-    #getMove
-    #Description: Gets the next move from the Player.
+    # getMove
+    # Description: Gets the next move from the Player.
     #
-    #Parameters:
+    # Parameters:
     #   currentState - The state of the current game waiting for the player's move (GameState)
     #
-    #Return: The Move to be made
+    # Return: The Move to be made
     ##
     def getMove(self, currentState):
-
-        #create a node object with a move, current state, eval, parent,
+        # create a node object with a move, current state, eval, parent,
         #   children, minimax value
         #   may need to eventually add in a part for alpha-beta pruning
         root = {
@@ -313,78 +309,93 @@ class AIPlayer(Player):
             "evaluation": self.utility(currentState),
             "parent": None,
             "children": [],
-            "minimaxValue": 0
+            "minimaxVal": 0
         }
 
         # list of nodes at specific depth
+        depth0Nodes = []
         depth1Nodes = []
         depth2Nodes = []
         depth3Nodes = []
+
+        depth0Nodes.append(root)
 
         myInv = getCurrPlayerInventory(currentState)
         myId = myInv.player
 
         # Get all possible first moves.
-        firstPossibleMoves = listAllLegalMoves(currentState)
+        firstPossibleMoves = self.expandNode(root)
 
-        #for each move in the list of the first possible moves
+        # for each move in the list of the first possible moves
         #   create a new state of the move that was taking
         #   and add that to the children
-        for move in firstPossibleMoves:
-            depth1State = getNextStateAdversarial(currentState, move)
-            depth1Node = self.createNode(move, depth1State, root)
-            depth1Nodes.append(depth1Node)
-            root["children"].append(depth1Node)
+        for node in firstPossibleMoves:
+            root["children"].append(node)
+            depth1Nodes.append(node)
 
-        # # Get all second moves.
-        # for node1 in depth1Nodes:
-        #     depth2Moves = listAllLegalMoves(node1["state"])
-        #
-        #     for move2 in depth2Moves:
-        #         depth2State = getNextStateAdversarial(node1["state"], move2)
-        #         depth2Node = self.createNode(move2, depth2State, node1)
-        #         depth2Nodes.append(depth2Node)
-        #         node1["children"].append(depth2Node)
-        #
-        # # Get all third moves.
-        # for node2 in depth2Nodes:
-        #     depth3Moves = listAllLegalMoves(node2["state"])
-        #
-        #     # Get all second moves.
-        #     for move3 in depth3Moves:
-        #         depth3State = getNextStateAdversarial(node2["state"], move3)
-        #         depth3Node = self.createNode(move3, depth3State, node2)
-        #         depth3Nodes.append(depth3Node)
-        #         node2["children"].append(depth3Node)
+        for node in depth1Nodes:
+            secondMoves = self.expandNode(node)
 
-        return self.getBestNode(root, myId)["moveToReach"]
+            for node2 in secondMoves:
+                node["children"].append(node2)
+                depth2Nodes.append(node2)
 
-    def getBestNode(self, node, myId):
-        # Base case: no children, just get itself.
-        if len(node["children"]) == 0:
-            return node
+        for node in depth2Nodes:
+            thirdMoves = self.expandNode(node)
+
+            for node3 in thirdMoves:
+                node["children"].append(node3)
+                depth3Nodes.append(node3)
+
+        nodes = []
+
+        for node in depth0Nodes:
+            nodes.append(node)
+        for node in depth1Nodes:
+            nodes.append(node)
+        for node in depth1Nodes:
+            nodes.append(node)
+        for node in depth2Nodes:
+            nodes.append(node)
+
+        self.calcMinimaxVals(nodes, myId)
+
+        depth1MiniMaxVals = []
+
+        # Get all depth 1 minimax vals and get the max or min.
+        for node in depth1Nodes:
+            depth1MiniMaxVals.append(node["minimaxVal"])
+
+        # Since minimax is based on move count, min is better if it's my turn.
+        if root["state"].whoseTurn == myId:
+            bestVal = min(depth1MiniMaxVals)
         else:
-            nodesWithBestValue = []
+            bestVal = max(depth1MiniMaxVals)
 
-            # Get all children's minimax values.
-            miniMaxVals = []
+        # Return appropriate node's move.
+        for node in depth1Nodes:
+            if node["minimaxVal"] == bestVal:
+                return node["moveToReach"]
 
-            for child in node["children"]:
-                miniMaxVal = self.getBestNode(child, myId)["minimaxValue"]
-                miniMaxVals.append(miniMaxVal)
+    def calcMinimaxVals(self, nodes, myId):
+        depth = 2  # Lowest depth with children.
 
-            # Since minimax vals are based on move count, get lowest val if it's my turn.
-            if myId == node["state"].whoseTurn:
-                retVal = min(miniMaxVals)
-            else:
-                retVal = max(miniMaxVals)
+        # Calculate minimax vals for all nodes whose depth <= 2 (except root).
+        while depth > 0:
+            for node in nodes:
+                # Find appropriate nodes and get children's minimax vals.
+                if node["depth"] == depth:
+                    childrenMiniMaxVals = []
 
-            # Find child with matching minimax val and return it.
-            for child in node["children"]:
-                if child["minimaxValue"] == retVal:
-                    nodesWithBestValue.append(child)
+                    for child in node["children"]:
+                        childrenMiniMaxVals.append(child["minimaxVal"])
 
-            return nodesWithBestValue[0]
+                    # Since minimax is based on move count, min is better if it's my turn.
+                    if node["state"].whoseTurn == myId:
+                        node["minimaxVal"] = min(childrenMiniMaxVals)
+                    else:
+                        node["minimaxVal"] = max(childrenMiniMaxVals)
+            depth -= 1
 
     def expandNode(self, node):
         moves = listAllLegalMoves(node["state"])
@@ -405,7 +416,7 @@ class AIPlayer(Player):
                 "evaluation": util + newDepth,
                 "parent": node,
                 "children": [],
-                "minimaxValue": util
+                "minimaxVal": util
             }
             nodes.append(newNode)
             i += 1
@@ -434,7 +445,8 @@ class AIPlayer(Player):
             "evaluation": util + 1,
             "parent": parent,
             "children": [],
-            "minimaxValue": util
+            "minimaxVal": util
+
         }
 
         return node
