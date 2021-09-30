@@ -340,6 +340,7 @@ class AIPlayer(Player):
                 node["children"].append(node2)
                 depth2Nodes.append(node2)
 
+        # Get children of second moves.
         for node in depth2Nodes:
             thirdMoves = self.expandNode(node)
 
@@ -347,6 +348,7 @@ class AIPlayer(Player):
                 node["children"].append(node3)
                 depth3Nodes.append(node3)
 
+        # Add all nodes to a list.
         nodes = []
 
         for node in depth0Nodes:
@@ -377,6 +379,16 @@ class AIPlayer(Player):
             if node["minimaxVal"] == bestVal:
                 return node["moveToReach"]
 
+    ##
+    # calcMinimaxVals
+    # Description: Updates minimax values for nodes in the tree.
+    #
+    # Parameters:
+    #   nodes: a list of nodes.
+    #   myId: my player number.
+    #
+    # Return: N/A.
+    ##
     def calcMinimaxVals(self, nodes, myId):
         depth = 2  # Lowest depth with children.
 
@@ -397,6 +409,15 @@ class AIPlayer(Player):
                         node["minimaxVal"] = max(childrenMiniMaxVals)
             depth -= 1
 
+    ##
+    # expandNode
+    # Description: Gets a list of nodes corresponding to moves made from the given node's state.
+    #
+    # Parameters:
+    #   node: the current node.
+    #
+    # Return: the list of nodes.
+    ##
     def expandNode(self, node):
         moves = listAllLegalMoves(node["state"])
         states = []
@@ -425,7 +446,7 @@ class AIPlayer(Player):
 
     ##
     # createNode
-    # Description: Creates a node with 5 values.
+    # Description: Creates a node with 7 values.
     #
     # Parameters:
     #   move: the move to get to the state.
