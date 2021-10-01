@@ -355,8 +355,6 @@ class AIPlayer(Player):
             nodes.append(node)
         for node in depth1Nodes:
             nodes.append(node)
-        for node in depth1Nodes:
-            nodes.append(node)
         for node in depth2Nodes:
             nodes.append(node)
 
