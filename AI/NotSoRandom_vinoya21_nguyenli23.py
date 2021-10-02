@@ -318,10 +318,18 @@ class AIPlayer(Player):
         #get the drone to sit on the enemy tunnel
         toRet += utilityEstimate.get(self.droneUtility(droneList, enemyWorkerList, enemyTunnel), 0.0)/9
 
+        # modifying the toRet to be within the range [-1, 1]
         if toRet <= 0:
             toRet = 0.01
         if toRet >= 1:
             toRet = 0.99
+
+        if toRet == 0.5:
+            toRet = 0
+        elif toRet > 0.5:
+            toRet = (2 * toRet) - 1
+        elif toRet < 0.5:
+            toRet = -(1 - (2 * toRet))
 
         return toRet
 
