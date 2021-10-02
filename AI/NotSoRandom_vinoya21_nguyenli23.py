@@ -16,6 +16,7 @@ from Move import Move
 from GameState import *
 from AIPlayerUtils import *
 from typing import Dict, List
+from math import inf
 
 ##
 #AIPlayer
@@ -107,21 +108,22 @@ class AIPlayer(Player):
         #   children, minimax value
         #   may need to eventually add in a part for alpha-beta pruning
         root = {
-            "moveToReach": None,
+            "move": None,
             "state": currentState,
             "evaluation": self.utility(currentState),
             "parent": None
         }
 
-        return self.getMiniMaxMove(root, 0, True, -1000, 1000)
+        return self.getMiniMaxMove(root, 0, True, -inf, inf)
 
     def getMiniMaxMove (self, currentNode, currentDepth, myTurn, alpha, beta):
+        
         maxDepth = 2
 
         currNodeEval = currentNode.get("evaluation")
         currentState = currentNode.get("state")
 
-        if currentDepth == maxDepth or currNodeEval == 0 or currNodeEval == 1:
+        if currentDepth == maxDepth or currNodeEval == -1 or currNodeEval == 1:
             return currNodeEval
 
         children = []
@@ -130,15 +132,17 @@ class AIPlayer(Player):
             newState = getNextStateAdversarial(currentState, move)
 
             node = {
-                "moveToReach": move,
+                "move": move,
                 "state": newState,
                 "evaluation": self.utility(newState),
-                "parent": currentNode,
+                "parent": None,
             }
             children.append(node)
 
-        #sort by evaluation descending
-        #children = sorted(children, key=lambda node: node.get("evalutation"), reverse=True)
+        children = sorted(children, key=lambda child: child.get("evaluation"), reverse=True)
+
+        #only take the highest 2 nodes
+        children = children[:2]
 
         endNodes = []
 
@@ -150,36 +154,57 @@ class AIPlayer(Player):
             for node in endNodes:
                 node["evaluation"] = self.getMiniMaxMove(node, 1, False, -1000, 1000)
         
-                best = max(endNodes, key=lambda node: node.get("evaluation"))
-            
+            best = max(endNodes, key=lambda node: node.get("evaluation"))
+            print(best)
             while best.get("parent") is not None:
                 best = best.get("parent")
             
-            return best.get("moveToReach")
+            print(best)
+            
+            return best.get("move")
         
         else:
             if myTurn:
-                maxScore = -1000
+                maxScore = -inf
                 for node in endNodes:
-                    miniMaxScore = self.getMiniMaxMove(node, currentDepth + 1, False)
+                    miniMaxScore = self.getMiniMaxMove(node, currentDepth + 1, False, alpha, beta)
                     maxScore = max(maxScore, miniMaxScore)
+
+                    alpha = max(alpha, maxScore)
+
+                    if beta <= alpha:
+                        break
 
                 return maxScore
             
             else:
-                minScore = 1000
+                minScore = inf
                 for node in endNodes:
-                    miniMaxScore = self.getMiniMaxMove(node, currentDepth + 1, True)
+                    miniMaxScore = self.getMiniMaxMove(node, currentDepth + 1, True, alpha, beta)
                     minScore = min(minScore, miniMaxScore)
+
+                    beta = min(beta, minScore)
+
+                    if beta <= alpha:
+                        break
 
                 return minScore
 
 
 
 
-
+    ##
+    #getEndNode
+    #Description: Recursively finds the highest scoring end node
+    #
+    #Parameters:
+    #   currentNode - node to find
+    #
+    #Return: The Move to be made
+    ##
     def getEndNode(self, currentNode):
-        if currentNode.get("moveToReach").moveType == END:
+        currentMove = currentNode.get("move")
+        if currentMove.moveType == END:
             return currentNode
 
         currentState = currentNode.get("state")
@@ -190,7 +215,7 @@ class AIPlayer(Player):
             newState = getNextStateAdversarial(currentState, move)
 
             node = {
-                "moveToReach": move,
+                "move": move,
                 "state": newState,
                 "evaluation": self.utility(newState),
                 "parent": currentNode,
@@ -333,62 +358,6 @@ class AIPlayer(Player):
 
         return toRet
 
-    #bestMove
-    #
-    #Description: goes through each node in a list and finds the one with the 
-    #highest evaluation
-    #
-    #Parameters: nodeList - the list of nodes you want to find the best eval for
-    #
-    #return: the node with the best eval
-    def bestMove(self, nodeList):
-        bestNode = nodeList[0]
-        for node in nodeList:
-            if (node['eval'] > bestNode['eval']):
-                bestNode = node
-
-        return bestNode
-
-
-    #expandNode
-    #
-    #Description: generate a list of all valid moves from the gamestate
-    #             in the given node
-    #
-    #             create a list of 
-    #
-    #Parameters: node - an existing node
-    #
-    #return: list of nodes
-    def expandNode(self, node):
-
-        #list of nodes to return
-        nodeList = []
-        
-        #get current state
-        currentState = node.get('state')
-
-        #list all valid moves from the current state of the node
-        allMoves = listAllLegalMoves(currentState)
-
-        for move in allMoves:
-
-            
-            newState = self.getNextState(currentState, move)
-            newDepth = node.get('depth') + 1
-            newNode = {
-                'move' : move,
-                'state' : newState,
-                'depth' : newDepth,
-                'eval' : self.utility(newState),
-                'parent': node
-            }
-
-            nodeList.append(newNode)
-
-            
-        return nodeList
-
     #scoreUtility
     #
     #Description: return an evaluation based off of the current score of the game       
@@ -481,75 +450,6 @@ class AIPlayer(Player):
 
         return 9
 
-    #I found this online that had a getNextState working better than the one in AIPlayerUtils
-    def getNextState(self, currentState, move):
-        """
-        Revised version of getNextState from AIPlayerUtils.
-        Copied from Nux's email to the class.
-        :param currentState: The current GameState.
-        :param move: The move to be performed.
-        :return: The next GameState from the specified move.
-        """
-
-        # variables I will need
-        myGameState = currentState.fastclone()
-        myInv = getCurrPlayerInventory(myGameState)
-        me = myGameState.whoseTurn
-        myAnts = myInv.ants
-        myTunnels = myInv.getTunnels()
-        myAntHill = myInv.getAnthill()
-
-        # If enemy ant is on my anthill or tunnel update capture health
-        ant = getAntAt(myGameState, myAntHill.coords)
-        if ant is not None:
-            if ant.player != me:
-                myAntHill.captureHealth -= 1
-
-        # If an ant is built update list of ants
-        antTypes = [WORKER, DRONE, SOLDIER, R_SOLDIER]
-        if move.moveType == BUILD:
-            if move.buildType in antTypes:
-                ant = Ant(myInv.getAnthill().coords, move.buildType, me)
-                myInv.ants.append(ant)
-                # Update food count depending on ant built
-                if move.buildType == WORKER:
-                    myInv.foodCount -= 1
-                elif move.buildType == DRONE or move.buildType == R_SOLDIER:
-                    myInv.foodCount -= 2
-                elif move.buildType == SOLDIER:
-                    myInv.foodCount -= 3
-            # ants are no longer allowed to build tunnels, so this is an error
-            elif move.buildType == TUNNEL:
-                print("Attempted tunnel build in getNextState()")
-                return currentState
-
-        # If an ant is moved update their coordinates and has moved
-        elif move.moveType == MOVE_ANT:
-            newCoord = move.coordList[-1]
-            startingCoord = move.coordList[0]
-            for ant in myAnts:
-                if ant.coords == startingCoord:
-                    ant.coords = newCoord
-                    # TODO: should this be set true? Design decision
-                    ant.hasMoved = False
-                    attackable = listAttackable(ant.coords, UNIT_STATS[ant.type][RANGE])
-                    for coord in attackable:
-                        foundAnt = getAntAt(myGameState, coord)
-                        if foundAnt is not None:  # If ant is adjacent my ant
-                            if foundAnt.player != me:  # if the ant is not me
-                                foundAnt.health = foundAnt.health - UNIT_STATS[ant.type][
-                                    ATTACK]  # attack
-                                # If an enemy is attacked and loses all its health
-                                # remove it from the other players
-                                # inventory
-                                if foundAnt.health <= 0:
-                                    myGameState.inventories[1 - me].ants.remove(foundAnt)
-                                # If attacked an ant already don't attack any more
-                                break
-        return myGameState
-
-
-
 ##
 ############ UNIT TESTS ###########################
 ##
@@ -609,28 +509,21 @@ test1.board[5][5].ant = queen1
 #test if utility is 0.5 at the start of a game
 if(testAI.utility(test1) != 0.5):
     print("Utility is", testAI.utility(test1), "when should be 0.5 at the start of the game")
-else:
-    print("Utility test for game start passed.")
 
 #test if score utility is 0 at the start of a game
 if(testAI.scoreUtility(0, 0, 10, 10, 3, 3) != 0):
     print("Score utility is ", testAI.scoreUtility(test1), "when it should be 0")
-else:
-    print("Utility test for game score passed.")
 
 #distance from worker to food is 1 so it should return 1
 if(testAI.workerUtility(workers, tunnel0, food0) != 1):
     print("Worker utility is", testAI.workerUtility(workers, tunnel0, food0), 
         "when it should be 1")
-else:
-    print("Utility test for workerUtility passed.")
+
 
 #distance from drone to enemy tunnel is 2 so should return 2
 if(testAI.droneUtility(drones, enemyWorkers, tunnel1) != 2):
     print("Drone utility is", testAI.droneUtility(drones, enemyWorkers, tunnel1), 
         "when it should be 2")
-else:
-    print("Utility test for droneUtility passed")
 
 
 
