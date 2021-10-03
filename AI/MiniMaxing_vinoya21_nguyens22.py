@@ -37,7 +37,7 @@ class AIPlayer(Player):
     #   cpy           - whether the player is a copy (when playing itself)
     ##
     def __init__(self, inputPlayerId):
-        super(AIPlayer,self).__init__(inputPlayerId, "NotSoRandom")
+        super(AIPlayer,self).__init__(inputPlayerId, "MiniMaxing")
         
     
     ##
