@@ -39,7 +39,7 @@ class AIPlayer(Player):
     #   currentState: the state of the game.
     ##
     def utility(self, currentState):
-        moves = 0  # Start with "neutral" value
+        weight = 0.1  # Start with "neutral" value
 
         # Get inventories.
         myInv = getCurrPlayerInventory(currentState)
@@ -66,29 +66,33 @@ class AIPlayer(Player):
         enemyAnthill = enemyInv.getAnthill()
 
         # Adjust weight based on various factors.
-        moves += self.getFoodWeightAdjustment(myFood, enemyFood, myAnts, myWorkerAnts, myAnthill, myTunnel, myFoodPlacement)
-        moves += self.getAntWeightAdjustment(myAnts, myCombatAnts, enemyAnts, enemyCombatAnts)
-        moves += self.getCombatDistanceWeightAdjustment(myCombatAnts, enemyWorkerAnts, enemyQueen)
+        weight += self.getFoodWeightAdjustment(myFood, enemyFood)
+        weight += self.getAntWeightAdjustment(myAnts, myCombatAnts, enemyAnts, enemyCombatAnts)
+        weight += self.getHealthWeightAdjustment(myQueen, myAnthill, enemyQueen, enemyAnthill)
+        weight += self.getFoodProxWeightAdjustment(myAnts, myWorkerAnts, myAnthill, myTunnel, myFoodPlacement)
+        weight += self.getCombatDistanceWeightAdjustment(myCombatAnts, enemyWorkerAnts, enemyQueen)
 
         # Automatically set good or bad weights depending on certain conditions.
-        if len(myWorkerAnts) > 2:
-            moves = 100000000000
+        if len(myWorkerAnts) > 1:
+            weight = 0
 
         if enemyQueen is None:
-            moves = 0
-
-        if len(myCombatAnts) > 2:
-            moves = 100000000000
+            weight = 1
 
         if myQueen.coords == myAnthill.coords or approxDist(myQueen.coords, myAnthill.coords) > 1:
-            moves = 100000000000
+            weight = 0
 
         for enemyAnt in enemyCombatAnts:
-            if approxDist(myQueen.coords, enemyAnt.coords) == 1:
-                moves = 1000000000000
+            if (approxDist(myQueen.coords, enemyAnt.coords) == 1):
+                weight = 0
 
-        #gonna have to change this to more of a hw 2a utility function
-        return moves
+        # In case weight goes out of bounds.
+        if weight <= 0:
+            weight = 0.01
+        elif weight >= 1:
+            weight = 0.99
+
+        return weight
 
     # getCombatDistanceWeightAdjustment
     # Adjusts weight for utility() based on distance of combat ants from enemy units.
@@ -101,34 +105,71 @@ class AIPlayer(Player):
     # Return: amount to adjust weight by.
     ##
     def getCombatDistanceWeightAdjustment(self, myCombatAnts, enemyWorkerAnts, enemyQueen):
-        moves = 0
-        enemyWorkerMoves = 0
-        enemyQueenMoves = 0
+        adjustment = 0
+        enemyWorkerWeight = 0
+        enemyQueenWeight = 0
 
         if len(myCombatAnts) > 0:
             for combatant in myCombatAnts:
-                if enemyWorkerAnts is not None:
-                    for worker in enemyWorkerAnts:
-                        distToWorker = approxDist(combatant.coords, worker.coords)
-                        if combatant.type == 2:  # Drone
-                            distToWorker /= 3
-                        elif combatant.type == 3:  # Soldier
-                            distToWorker /= 2
-                        moves += distToWorker
+                for worker in enemyWorkerAnts:
+                    distToWorker = approxDist(combatant.coords, worker.coords)
+                    enemyWorkerWeight += distToWorker
 
                 if enemyQueen is not None:
                     distToQueen = approxDist(combatant.coords, enemyQueen.coords)
-                    if combatant.type == 2:  # Drone
-                        distToQueen /= 3
-                    elif combatant.type == 3:  # Soldier
-                        distToQueen /= 2
-                    moves += distToQueen
+                else:
+                    distToQueen = 0
 
-            # if enemyWorkerMoves != None:
-            #     moves += enemyWorkerMoves
-            # else:
-            #     moves += enemyQueenMoves
-        return moves
+                enemyQueenWeight += distToQueen
+            adjustment += 0.1 - (0.005 * enemyWorkerWeight)
+            adjustment += 0.1 - (0.005 * enemyQueenWeight)
+        return adjustment
+
+    # getFoodProxWeightAdjustment
+    # Adjusts weight for utility() based on distance of workers from food/structures.
+    #
+    # Parameters:
+    #   myAnts: the amount of ants this player has.
+    #   myWorkerAnts: the amount of worker ants this player has.
+    #   myAnthill: this player's anthill.
+    #   myTunnel: this player's tunnel.
+    #   myFoodPlacement: where this player's food is.
+    #
+    # Return: amount to adjust weight by.
+    ##
+    def getFoodProxWeightAdjustment(self, myAnts, myWorkerAnts, myAnthill, myTunnel, myFoodPlacement):
+        adjustment = 0
+        sum = 0
+        hillCovered = False
+
+        for ant in myAnts:
+            if ant.coords == myAnthill.coords:
+                hillCovered = True
+
+        for worker in myWorkerAnts:
+            if worker.carrying:
+                tunnelDist = approxDist(worker.coords, myTunnel.coords)
+                anthillDist = approxDist(worker.coords, myAnthill.coords)
+                if tunnelDist < anthillDist or hillCovered:
+                    sum += (.005 * tunnelDist)
+                else:
+                    sum += (.005 * anthillDist)
+
+                adjustment += 0.015
+            elif not worker.carrying:
+                foodOne = myFoodPlacement[0]
+                foodTwo = myFoodPlacement[1]
+
+                foodOneDist = approxDist(worker.coords, foodOne.coords)
+                foodTwoDist = approxDist(worker.coords, foodTwo.coords)
+
+                if foodOneDist < foodTwoDist:
+                    sum += (.004 * foodOneDist)
+                else:
+                    sum += (.004 * foodTwoDist)
+
+            adjustment += (0.08 - (sum / len(myWorkerAnts)))
+        return adjustment
 
     # getFoodWeightAdjustment
     # Adjusts weight for utility() based on food factors.
@@ -139,60 +180,15 @@ class AIPlayer(Player):
     #
     # Return: amount to adjust weight by.
     ##
-    def getFoodWeightAdjustment(self, myFood, enemyFood, ants, workers, myAnthill, myTunnel, myFoodPlacement):
-        moves = 0
-        hillCovered = False
+    def getFoodWeightAdjustment(self, myFood, enemyFood):
+        difference = myFood - enemyFood
 
-        foodOne = myFoodPlacement[0]
-        foodTwo = myFoodPlacement[1]
-
-        tunnelToFOne = approxDist(myTunnel.coords, foodOne.coords)
-        tunnelToFTwo = approxDist(myTunnel.coords, foodTwo.coords)
-        hillToFOne = approxDist(myAnthill.coords, foodOne.coords)
-        hillToFTwo = approxDist(myAnthill.coords, foodTwo.coords)
-        maxDist = min([tunnelToFOne, tunnelToFTwo, hillToFOne, hillToFTwo])
-
-        difference = (11 - myFood)
-        movesToWin = difference * (maxDist)
-
-        for ant in ants:
-            if ant.coords == myAnthill.coords:
-                hillCovered = True
-
-        for worker in workers:
-            tunnelDist = approxDist(worker.coords, myTunnel.coords)
-            anthillDist = approxDist(worker.coords, myAnthill.coords)
-            foodOneDist = approxDist(worker.coords, foodOne.coords)
-            foodTwoDist = approxDist(worker.coords, foodTwo.coords)
-
-            if worker.carrying:  
-                if tunnelDist < anthillDist or hillCovered:
-                    if(foodOneDist > foodTwoDist):
-                        moves += - tunnelToFTwo/2 - (tunnelToFTwo - tunnelDist)/2
-                    else:
-                        moves += - tunnelToFOne/2 - (tunnelToFOne - tunnelDist)/2
-                else:
-                    if(foodOneDist > foodTwoDist):
-                        moves += - hillToFTwo/2 - (hillToFTwo - anthillDist)/2
-                    else:
-                        moves +=  - hillToFTwo/2 - (hillToFTwo - anthillDist)/2
-
-            elif not worker.carrying:
-                if foodOneDist < foodTwoDist:
-                    if(tunnelDist > anthillDist):
-                        moves += - (hillToFOne - foodOneDist)/2
-                    else:
-                        moves += - (tunnelToFOne - foodOneDist)/2
-
-                else:
-                    if(tunnelDist > anthillDist):
-                        moves += - (hillToFTwo - foodTwoDist)/2
-                    else:
-                        moves += - (tunnelToFTwo - foodTwoDist)/2
-        if len(workers) != 0:
-            moves = (movesToWin + (moves - (myFood * (maxDist)))/len(workers))
-
-        return moves
+        # Increment based on who has more food.
+        if difference > 0:
+            adjustment = difference * .04
+        else:
+            adjustment = difference * .025
+        return adjustment
 
     # getAntWeightAdjustment
     # Adjusts weight for utility() based on ant factors.
@@ -206,7 +202,50 @@ class AIPlayer(Player):
     # Return: amount to adjust weight by.
     ##
     def getAntWeightAdjustment(self, myAnts, myCombatAnts, enemyAnts, enemyCombatAnts):
-        adjustment = (len(enemyAnts) - len(myCombatAnts))*5
+        adjustment = 0  # Start with no adjustment.
+
+        # Adjust rating based on who has more ants.
+        if len(myAnts) > len(enemyAnts):
+            adjustment += 0.06
+
+        # Adjust rating based on who has more combat ants.
+        if len(myCombatAnts) > len(enemyCombatAnts):
+            adjustment += 0.06
+
+        return adjustment
+
+    # getHealthWeightAdjustment
+    # Adjusts weight for utility() based on health factors.
+    #
+    # Parameters:
+    #   myQueen: the queen this player has.
+    #   myAnthill: the anthill this player has.
+    #   enemyQueen: the queen the opponent has.
+    #   enemyAnthill: the anthill the opponent has.
+    #
+    # Return: amount to adjust weight by.
+    ##
+    def getHealthWeightAdjustment(self, myQueen, myAnthill, enemyQueen, enemyAnthill):
+        adjustment = 0  # Start with no adjustment.
+
+        if enemyQueen is not None:
+            queenHealthDifference = myQueen.health - enemyQueen.health
+        else:
+            queenHealthDifference = myQueen.health
+        anthillHealthDifference = myAnthill.captureHealth - enemyAnthill.captureHealth
+
+        # Adjust rating based on whose queen has more health.
+        if queenHealthDifference > 0:
+            adjustment += 0.05
+        elif queenHealthDifference < 0:
+            adjustment -= 0.05
+
+        # Adjust rating based on whose anthill has more health.
+        if anthillHealthDifference > 0:
+            adjustment += 0.05
+        elif anthillHealthDifference < 0:
+            adjustment -= 0.05
+
         return adjustment
 
     # bestMove
@@ -217,23 +256,22 @@ class AIPlayer(Player):
     ##
     def bestMove(self, nodeList):
         evalList = []
-        nodesWithMinEvals = []
+        nodesWithMaxEvals = []
 
-        #print (nodeList[0], "\n\n")
         for node in nodeList:
             nodeEval = node['evaluation']
             evalList.append(nodeEval)
 
-        minValue = min(evalList)
+        maxValue = max(evalList)
 
         index = 0
 
         for i in evalList:
-            if i == minValue:
-                nodesWithMinEvals.append(nodeList[index])
+            if i == maxValue:
+                nodesWithMaxEvals.append(nodeList[index])
             index += 1
 
-        return nodesWithMinEvals[random.randint(0, len(nodesWithMinEvals) - 1)]
+        return nodesWithMaxEvals[random.randint(0, len(nodesWithMaxEvals) - 1)]
 
     ##
     #getPlacement
@@ -309,7 +347,7 @@ class AIPlayer(Player):
             "evaluation": self.utility(currentState),
             "parent": None,
             "children": [],
-            "minimaxVal": 0
+            "minimaxVal": 0  # Updated later.
         }
 
         # list of nodes at specific depth
@@ -320,19 +358,18 @@ class AIPlayer(Player):
 
         depth0Nodes.append(root)
 
+        # For getting max or min.
         myInv = getCurrPlayerInventory(currentState)
         myId = myInv.player
 
         # Get all possible first moves.
-        firstPossibleMoves = self.expandNode(root)
+        firstMoves = self.expandNode(root)
 
-        # for each move in the list of the first possible moves
-        #   create a new state of the move that was taking
-        #   and add that to the children
-        for node in firstPossibleMoves:
+        for node in firstMoves:
             root["children"].append(node)
             depth1Nodes.append(node)
 
+        # Get children of first moves.
         for node in depth1Nodes:
             secondMoves = self.expandNode(node)
 
@@ -348,36 +385,16 @@ class AIPlayer(Player):
                 node["children"].append(node3)
                 depth3Nodes.append(node3)
 
-        # Add all nodes to a list.
-        nodes = []
-
-        for node in depth0Nodes:
-            nodes.append(node)
-        for node in depth1Nodes:
-            nodes.append(node)
-        for node in depth1Nodes:
-            nodes.append(node)
-        for node in depth2Nodes:
-            nodes.append(node)
-
-        self.calcMinimaxVals(nodes, myId)
-
-        depth1MiniMaxVals = []
-
-        # Get all depth 1 minimax vals and get the max or min.
-        for node in depth1Nodes:
-            depth1MiniMaxVals.append(node["minimaxVal"])
-
-        # Since minimax is based on move count, min is better if it's my turn.
-        if root["state"].whoseTurn == myId:
-            bestVal = min(depth1MiniMaxVals)
-        else:
-            bestVal = max(depth1MiniMaxVals)
+        self.calcMinimaxVals(root, myId)
 
         # Return appropriate node's move.
+        retValOptions = []
+
         for node in depth1Nodes:
-            if node["minimaxVal"] == bestVal:
-                return node["moveToReach"]
+            if node["minimaxVal"] == root["minimaxVal"]:
+                retValOptions.append(node["moveToReach"])
+
+        return retValOptions[random.randint(0, len(retValOptions) - 1)]
 
     ##
     # calcMinimaxVals
@@ -389,25 +406,24 @@ class AIPlayer(Player):
     #
     # Return: N/A.
     ##
-    def calcMinimaxVals(self, nodes, myId):
-        depth = 2  # Lowest depth with children.
+    def calcMinimaxVals(self, node, myId):
+        # Base case: no children, minimax = util + depth.
+        if len(node["children"]) == 0:
+            node["minimaxVal"] = self.utility(node["state"]) + node["depth"]
+        else:
+            # Get all children's minimax vals, set current node's equal to max or min of them.
+            childrenMinimaxVals = []
 
-        # Calculate minimax vals for all nodes whose depth <= 2 (except root).
-        while depth > 0:
-            for node in nodes:
-                # Find appropriate nodes and get children's minimax vals.
-                if node["depth"] == depth:
-                    childrenMiniMaxVals = []
+            for child in node["children"]:
+                self.calcMinimaxVals(child, myId)
+                childrenMinimaxVals.append(child["minimaxVal"])
 
-                    for child in node["children"]:
-                        childrenMiniMaxVals.append(child["minimaxVal"])
-
-                    # Since minimax is based on move count, min is better if it's my turn.
-                    if node["state"].whoseTurn == myId:
-                        node["minimaxVal"] = min(childrenMiniMaxVals)
-                    else:
-                        node["minimaxVal"] = max(childrenMiniMaxVals)
-            depth -= 1
+            # Based on weighting system from HW 2a.
+            # If it's my turn, want highest weight.
+            if node["state"].whoseTurn == myId:
+                node["minimaxVal"] = max(childrenMinimaxVals)
+            else:
+                node["minimaxVal"] = min(childrenMinimaxVals)
 
     ##
     # expandNode
@@ -424,21 +440,11 @@ class AIPlayer(Player):
         nodes = []
 
         for move in moves:
-            states.append(getNextState(node['state'], move))
+            states.append(getNextStateAdversarial(node['state'], move))
 
         i = 0  # Keep track of index.
         for move in moves:
-            newDepth = 1 + node["depth"]
-            util = self.utility(states[i])
-            newNode = {
-                "moveToReach": move,
-                "state": states[i],
-                "depth": newDepth,
-                "evaluation": util + newDepth,
-                "parent": node,
-                "children": [],
-                "minimaxVal": util
-            }
+            newNode = self.createNode(move, states[i], node)
             nodes.append(newNode)
             i += 1
 
@@ -466,8 +472,7 @@ class AIPlayer(Player):
             "evaluation": util + 1,
             "parent": parent,
             "children": [],
-            "minimaxVal": util
-
+            "minimaxVal": 0 # Updated later.
         }
 
         return node
