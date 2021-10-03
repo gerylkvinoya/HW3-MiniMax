@@ -149,17 +149,15 @@ class AIPlayer(Player):
         for node in children:
             endNodes.append(self.getEndNode(node))
 
-        #if this is the root node, then it is our turn
+        #if this is the root node, then it is our turn and we will recursively get the
+        #   move with the best eval
         if currentDepth == 0:
             for node in endNodes:
                 node["evaluation"] = self.getMiniMaxMove(node, 1, False, -1000, 1000)
         
             best = max(endNodes, key=lambda node: node.get("evaluation"))
-            print(best)
             while best.get("parent") is not None:
                 best = best.get("parent")
-            
-            print(best)
             
             return best.get("move")
         
@@ -263,87 +261,89 @@ class AIPlayer(Player):
     #
     #Return: the "guess" of how good the game state is
     ##
-    def utility(self, currentState) -> float:
-
-        #get my id and enemy id
-        myId = currentState.whoseTurn
-        enemyId = 1 - myId
-
-        #get the my inventory and the enemy inventory
-        myInv = currentState.inventories[myId]
-        enemyInv = currentState.inventories[enemyId]
-
-        #get the values of the queen, anthill, and foodcount
-        myQueen = myInv.getQueen()
-        myAntHill = myInv.getAnthill()
-        myTunnel = getConstrList(currentState, myId, (TUNNEL,))[0]
-        myFoodCount = myInv.foodCount
-        enemyQueen = enemyInv.getQueen()
-        enemyAntHill = enemyInv.getAnthill()
-        enemyTunnel = getConstrList(currentState, enemyId, (TUNNEL,))[0]
-        enemyFoodCount = enemyInv.foodCount
-
-        #get the closest food to my tunnel
-        foods = getConstrList(currentState, None, (FOOD,))           
-        foods.sort(key=lambda food: stepsToReach(currentState, myTunnel.coords, food.coords))
-        closestFood = foods[0] 
-
-        #check for the start of game
-        #foodCount should be 0, queen should have full health (10),
-        #anthill should have full capture health(3)
-        if (myFoodCount == 0 and enemyFoodCount == 0 and
-            myAntHill.captureHealth == 3 and enemyAntHill.captureHealth == 3 and
-            myQueen.health == 10 and enemyQueen.health == 10):
-            return 0.5
-
-        #get the lists of all the different types of ants
-        workerList = getAntList(currentState, myId, (WORKER,))
-        droneList = getAntList(currentState, myId, (DRONE,))
-        soldierList = getAntList(currentState, myId, (SOLDIER,))
-        rangedSoldierList = getAntList(currentState, myId, (R_SOLDIER,))
-        enemyWorkerList = getAntList(currentState, enemyId, (WORKER,))
-
-        #want to make sure there is only 1 worker and 1 drone
-        if len(droneList) != 1 and myFoodCount > 2:
-            return 0.0
-        if len(droneList) > 1:
-            return 0.0
-        if len(workerList) != 1:
-            return 0.0
-        if len(soldierList) != 0:
-            return 0.0
-        if len(rangedSoldierList) != 0:
-            return 0.0
-
+    def utility(self, currentState):
+        WEIGHT = 10 #weight value for moves
 
         #will modify this toRet value based off of gamestate
-        toRet = 0.5
+        toRet = 0
 
-        #will use this to estimate the number of "moves"
-        #the number of moves is connected to approxDist
-        #The lower the approxDist, the lower number
-        #of "moves" needed to get to an optimal gamestate
-        utilityEstimate = {
-            0: 1.0,
-            1: 0.88,
-            2: 0.77,
-            3: 0.66,
-            4: 0.55,
-            5: 0.44,
-            6: 0.33,
-            7: 0.22,
-            8: 0.11,
-            9: 0.0
-        }
+        #get my id and enemy id
+        me = currentState.whoseTurn
+        enemy = 1 - me
 
+        #get the values of the anthill, tunnel, and foodcount
+        myTunnel = getConstrList(currentState, me, (TUNNEL,))[0]
+        myAnthill = getConstrList(currentState, me, (ANTHILL,))[0]
+        myFoodList = getConstrList(currentState, 2, (FOOD,))
+        enemyTunnel = getConstrList(currentState, enemy, (TUNNEL,))[0]
 
-        #get the worker to move between the food and the tunnel
-        toRet += utilityEstimate.get(self.workerUtility(workerList, myTunnel, closestFood), 0.0)/9
+        #get my soldiers and workers
+        mySoldiers = getAntList(currentState, me, (SOLDIER,))
+        myWorkerList = getAntList(currentState, me, (WORKER,))
 
-        #get the drone to sit on the enemy tunnel
-        toRet += utilityEstimate.get(self.droneUtility(droneList, enemyWorkerList, enemyTunnel), 0.0)/9
+        #get enemy worker and queen
+        enemyWorkerList = getAntList(currentState, enemy, (WORKER,))
+        enemyQueenList = getAntList(currentState, enemy, (QUEEN,))
 
-        # modifying the toRet to be within the range [-1, 1]
+        for worker in myWorkerList:
+
+            #if a worker is carrying food, go to tunnel
+            if worker.carrying:
+                tunnelDist = stepsToReach(currentState, worker.coords, myTunnel.coords)
+                #anthillDist = stepsToReach(currentState, worker.coords, myAnthill.coords)
+
+                #if tunnelDist <= anthillDist:
+                toRet = toRet + (1 / (tunnelDist + (4 * WEIGHT)))
+                #else:
+                    #toRet = toRet + (1 / (anthillDist + (4 * WEIGHT)))
+
+                #add to the eval if a worker is carrying food
+                toRet = toRet + (1 / WEIGHT)
+
+            #if a worker isn't carrying food, get to the food
+            else:
+                foodDist = 1000
+                for food in myFoodList:
+                    # Updates the distance if its less than the current distance
+                    dist = stepsToReach(currentState, worker.coords, food.coords)
+                    if (dist < foodDist):
+                        foodDist = dist
+                toRet = toRet + (1 / (foodDist + (4 * WEIGHT)))
+        
+        #try to get only 1 worker
+        if len(myWorkerList) == 1:
+            toRet = toRet + (2 / WEIGHT)
+        
+
+        #try to get only one soldier
+        if len(mySoldiers) == 1:
+            toRet = toRet + (WEIGHT * 0.2)
+            enemyWorkerLength = len(enemyWorkerList)
+            enemyQueenLength = len(enemyQueenList)
+            
+            #we want the soldier to go twoards the enemy tunnel/workers
+            if enemyWorkerList:
+                distToEnemyWorker = stepsToReach(currentState, mySoldiers[0].coords, enemyWorkerList[0].coords)
+                distToEnemyTunnel = stepsToReach(currentState, mySoldiers[0].coords, enemyTunnel.coords)
+                toRet = toRet + (1 / (distToEnemyWorker + (WEIGHT * 0.2))) + (1 / (distToEnemyTunnel + (WEIGHT * 0.5)))
+            
+            #reward the agent for killing enemy workers
+            #try to kill the queen if enemy workers dead
+            else:
+                toRet = toRet + (2 * WEIGHT)
+                if enemyQueenLength > 0:
+                    enemyQueenDist = stepsToReach(currentState, mySoldiers[0].coords, enemyQueenList[0].coords)
+                    toRet = toRet + (1 / (1 + enemyQueenDist))
+            
+
+            toRet = toRet + (1 / (enemyWorkerLength + 1)) + (1 / (enemyQueenLength + 1))
+
+        #try to get higher food score
+        foodCount = currentState.inventories[me].foodCount
+        toRet = toRet + foodCount
+
+        #convert the previous score of [0,1] to [-1, 1]
+        toRet = 1 - (1 / (toRet + 1))
         if toRet <= 0:
             toRet = 0.01
         if toRet >= 1:
@@ -357,98 +357,6 @@ class AIPlayer(Player):
             toRet = -(1 - (2 * toRet))
 
         return toRet
-
-    #scoreUtility
-    #
-    #Description: return an evaluation based off of the current score of the game       
-    #              for food, queen health, anthill health
-    #
-    #Parameters: 
-    #   myFoodCount
-    #   enemyFoodCount
-    #   myQueenHealth
-    #   enemyQueenHealth
-    #   myAntHillHealth
-    #   enemyAntHillHealth
-    #
-    #return: utility number of the evaluation of the game
-    def scoreUtility(self, myFoodCount, enemyFoodCount, myQueenHealth, enemyQueenHealth,
-                     myAntHillHealth, enemyAntHillHealth) -> float:
-        toRet = 0
-
-        #food count
-        myFoodCountScale = myFoodCount/11
-        enemyFoodCountScale = enemyFoodCount/11
-        foodCountDiff = myFoodCountScale - enemyFoodCountScale
-        toRet += foodCountDiff/3
-
-        #queen health
-        myQueenHealthScale = 1 - (myQueenHealth/10)
-        enemyQueenHealthScale = 1 - (enemyQueenHealth/10)
-        queenHealthDiff = enemyQueenHealthScale - myQueenHealthScale
-
-        #scaling down the diff because the numbers were unrealistic at first
-        toRet += queenHealthDiff/3
-
-        #anthill capture health
-        myCapHealthScale = 1 - (myAntHillHealth/3)
-        enemyCapHealthScale = 1 - (enemyAntHillHealth/3)
-        capHealthDiff = enemyCapHealthScale - myCapHealthScale
-
-        #scaling down the diff because the numbers were unrealistic at first
-        toRet += capHealthDiff/3
-
-        return toRet
-        
-    #workerUtility
-    #
-    #Description: return an evaluation based off of the move of a worker       
-    #
-    #Parameters:
-    #   workerList - list of workers
-    #   myTunnel - to get coords of tunnel
-    #   closestFood - to get coords of closest food
-    #
-    #return: utility number of the evaluation of the game
-    def workerUtility(self, workerList, myTunnel, closestFood) -> int:
-        if workerList:
-            for worker in workerList:
-                if worker.carrying:
-                    tunnelDist = approxDist(worker.coords, myTunnel.coords)
-                    return tunnelDist
-                
-                else:
-                    foodDist = approxDist(worker.coords, closestFood.coords)
-                    return foodDist
-
-        return 9
-
-    #droneUtility
-    #
-    #Description: return an evaluation based off of the move of a drone       
-    #
-    #Parameters:
-    #   droneList - list of my drones
-    #   enemyWorkerList - list of enemy workers
-    #   enemyTunnel - to get coords of enemy tunnel
-    #
-    #return: utility number of the evaluation of the game
-    def droneUtility(self, droneList, enemyWorkerList, enemyTunnel) -> int:
-        
-        if len(enemyWorkerList) == 0:
-            return 0
-
-        #a little buggy when the drone chases after an enemy worker, but works fine vs the other AI as the drone can just sit on the enemy tunnel
-        if droneList:
-            for drone in droneList:
-                droneDist = approxDist(drone.coords, enemyTunnel.coords)
-                #droneAward += 1 - droneDist/9
-                #droneAward += utilityEstimate.get(droneDist, 0)\
-                return droneDist
-
-        #toRet += droneAward/9 #used to be 9
-
-        return 9
 
 ##
 ############ UNIT TESTS ###########################
@@ -507,24 +415,8 @@ test1.board[0][0].ant = queen0
 test1.board[5][5].ant = queen1
 
 #test if utility is 0.5 at the start of a game
-if(testAI.utility(test1) != 0.5):
+if(testAI.utility(test1) != -0.6653322658126501):
     print("Utility is", testAI.utility(test1), "when should be 0.5 at the start of the game")
-
-#test if score utility is 0 at the start of a game
-if(testAI.scoreUtility(0, 0, 10, 10, 3, 3) != 0):
-    print("Score utility is ", testAI.scoreUtility(test1), "when it should be 0")
-
-#distance from worker to food is 1 so it should return 1
-if(testAI.workerUtility(workers, tunnel0, food0) != 1):
-    print("Worker utility is", testAI.workerUtility(workers, tunnel0, food0), 
-        "when it should be 1")
-
-
-#distance from drone to enemy tunnel is 2 so should return 2
-if(testAI.droneUtility(drones, enemyWorkers, tunnel1) != 2):
-    print("Drone utility is", testAI.droneUtility(drones, enemyWorkers, tunnel1), 
-        "when it should be 2")
-
 
 
 
