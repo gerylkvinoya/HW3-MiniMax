@@ -37,7 +37,7 @@ class AIPlayer(Player):
     #   cpy           - whether the player is a copy (when playing itself)
     ##
     def __init__(self, inputPlayerId):
-        super(AIPlayer,self).__init__(inputPlayerId, "MiniMaxing")
+        super(AIPlayer,self).__init__(inputPlayerId, "MiniMaxingBackup")
         
     
     ##
@@ -110,7 +110,7 @@ class AIPlayer(Player):
         root = {
             "move": None,
             "state": currentState,
-            "evaluation": 0.0,
+            "evaluation": self.utility(currentState),
             "parent": None
         }
 
@@ -118,23 +118,18 @@ class AIPlayer(Player):
 
     def getMiniMaxMove (self, currentNode, currentDepth, myTurn, alpha, beta):
         
-        maxDepth = 3
+        maxDepth = 2
 
         currNodeEval = currentNode.get("evaluation")
-        currState = currentNode.get("state")
+        currentState = currentNode.get("state")
 
-        #if currentDepth == maxDepth or currNodeEval == -1 or currNodeEval == 1:
-        #    return currNodeEval
-
-        if currentDepth == maxDepth or abs(currNodeEval) == 1.0:
-            score_multiplier = 1 if myTurn else -1
-            return currNodeEval * score_multiplier
+        if currentDepth == maxDepth or currNodeEval == -1 or currNodeEval == 1:
+            return currNodeEval
 
         children = []
-        legalMoves = listAllLegalMoves(currState)
+        legalMoves = listAllLegalMoves(currentState)
         for move in legalMoves:
-
-            newState = self.getNextStateAdversarial(currState, move)
+            newState = getNextStateAdversarial(currentState, move)
 
             node = {
                 "move": move,
@@ -147,7 +142,7 @@ class AIPlayer(Player):
         children = sorted(children, key=lambda child: child.get("evaluation"), reverse=True)
 
         #only take the highest 2 nodes
-        children = children[:3]
+        children = children[:2]
 
         endNodes = []
 
@@ -215,19 +210,17 @@ class AIPlayer(Player):
         children = []
         legalMoves = listAllLegalMoves(currentState)
         for move in legalMoves:
-            newState = self.getNextStateAdversarial(currentState, move)
+            newState = getNextStateAdversarial(currentState, move)
 
             node = {
                 "move": move,
                 "state": newState,
                 "evaluation": self.utility(newState),
-                "parent": None,
+                "parent": currentNode,
             }
             children.append(node)
 
-        bestChild = max(children, key=lambda n: n.get("evaluation"))
-
-        bestChild["parent"] = currentNode
+        bestChild = max(children, key=lambda node: node.get("evaluation"))
 
         return self.getEndNode(bestChild)
 
@@ -269,13 +262,6 @@ class AIPlayer(Player):
     #Return: the "guess" of how good the game state is
     ##
     def utility(self, currentState):
-
-
-        if getWinner(currentState) == 1:
-            return 1.0
-        elif getWinner(currentState) == 0:
-            return -1.0
-
         WEIGHT = 10 #weight value for moves
 
         #will modify this toRet value based off of gamestate
@@ -363,39 +349,15 @@ class AIPlayer(Player):
         if toRet >= 1:
             toRet = 0.99
 
-        if toRet > 0.5:
+        if toRet == 0.5:
+            toRet = 0
+        elif toRet > 0.5:
             toRet = (2 * toRet) - 1
         elif toRet < 0.5:
             toRet = -(1 - (2 * toRet))
+
         return toRet
 
-    def getNextStateAdversarial(self, current_state: GameState, move):
-        """
-        get_next_state_adversarial
-        Citation: Made modification that Nux suggested via email (copied from this email).
-        This is the same as getNextState (above) except that it properly
-        updates the hasMoved property on ants and the END move is processed correctly.
-        :param current_state: A clone of the current state (GameState)
-        :param move: The move that the agent would take (Move).
-        :return: A clone of what the state would look like if the move was made.
-        """
-        # variables I will need
-        next_state = getNextState(current_state, move)
-        my_inventory = getCurrPlayerInventory(next_state)
-        my_ants = my_inventory.ants
-
-        # If an ant is moved update their coordinates and has moved
-        if move.moveType == MOVE_ANT:
-            # startingCoord = move.coordList[0]
-            starting_coord = move.coordList[len(move.coordList) - 1]
-            for ant in my_ants:
-                if ant.coords == starting_coord:
-                    ant.hasMoved = True
-        elif move.moveType == END:
-            for ant in my_ants:
-                ant.hasMoved = False
-            next_state.whoseTurn = 1 - current_state.whoseTurn
-        return next_state
 ##
 ############ UNIT TESTS ###########################
 ##
@@ -453,9 +415,5 @@ test1.board[0][0].ant = queen0
 test1.board[5][5].ant = queen1
 
 #test if utility is 0.5 at the start of a game
-#if(testAI.utility(test1) != -0.6653322658126501):
-    #print("Utility is", testAI.utility(test1), "when should be 0.5 at the start of the game")
-
-
-
-
+if(testAI.utility(test1) != -0.6653322658126501):
+    print("Utility is", testAI.utility(test1), "when should be 0.5 at the start of the game")
