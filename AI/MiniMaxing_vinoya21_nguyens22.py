@@ -382,21 +382,11 @@ class AIPlayer(Player):
 
 class TestCreateNode(unittest.TestCase):
     # Queens, anthills, and tunnels only.
-    def test_utility(self):
+    def test_utility_basic(self):
         player = AIPlayer(0)
 
-        # Create game state with food.
+        # Create game state.
         gameState = GameState.getBasicState()
-        p1Food1 = Building((1, 1), FOOD, 0)
-        p1Food2 = Building((2, 2), FOOD, 0)
-        gameState.board[1][1] = p1Food1
-        gameState.board[2][2] = p1Food2
-        gameState.inventories[2].constrs += [p1Food1, p1Food2]
-        p1Food1 = Building((7, 7), FOOD, 1)
-        p1Food2 = Building((8, 8), FOOD, 1)
-        gameState.board[7][7] = p1Food1
-        gameState.board[8][8] = p1Food2
-        gameState.inventories[2].constrs += [p1Food1, p1Food2]
 
         # Calculations below.
 
@@ -415,8 +405,8 @@ class TestCreateNode(unittest.TestCase):
         #     toRet = -(1 - (2 * toRet)) = -0.98
         self.assertEqual(player.utility(gameState), -0.98)
 
-    # Same as above, but with workers.
-    def test_utility2(self):
+    # Worker and food added.
+    def test_utility_worker_and_food(self):
         player = AIPlayer(0)
 
         # Create game state with food.
@@ -460,22 +450,12 @@ class TestCreateNode(unittest.TestCase):
         # assertAlmostEqual exists.
         self.assertAlmostEqual(player.utility(gameState), -159/251)
 
-    # Testing soldier parts.
-    def test_utility3(self):
+    # Soldier and enemy queen.
+    def test_utility_soldier_and_queen(self):
         player = AIPlayer(0)
 
-        # Create game state with food.
+        # Create game state.
         gameState = GameState.getBasicState()
-        p1Food1 = Building((1, 1), FOOD, 0)
-        p1Food2 = Building((2, 2), FOOD, 0)
-        gameState.board[1][1] = p1Food1
-        gameState.board[2][2] = p1Food2
-        gameState.inventories[2].constrs += [p1Food1, p1Food2]
-        p1Food1 = Building((7, 7), FOOD, 1)
-        p1Food2 = Building((8, 8), FOOD, 1)
-        gameState.board[7][7] = p1Food1
-        gameState.board[8][8] = p1Food2
-        gameState.inventories[2].constrs += [p1Food1, p1Food2]
 
         # Add soldier.
         soldier = Ant((1, 0), SOLDIER, 0)
@@ -485,7 +465,7 @@ class TestCreateNode(unittest.TestCase):
         # Calculations below.
 
         # toRet = 0
-        # toRet = toRet + (WEIGHT * 0.2) = .2
+        # One soldier, toRet = toRet + (WEIGHT * 0.2) = 2.
         # No workers, toRet = toRet + (2 * WEIGHT) = 22.
         # Dist to enemy queen is 17, toRet = toRet + (1 / (1 + 17)) = 397/18.
         # No enemy workers, toRet = toRet + (1 / (0 + 1)) + (1 / (1 + 1)) = 212/9.
@@ -503,6 +483,43 @@ class TestCreateNode(unittest.TestCase):
         # elif toRet < 0.5:
         #     toRet = -(1 - (2 * toRet))
         self.assertAlmostEqual(player.utility(gameState), 203/221)
+
+    # Soldier and enemy worker.
+    def test_utility_soldier_and_worker(self):
+        player = AIPlayer(0)
+
+        # Create game state.
+        gameState = GameState.getBasicState()
+
+        # Add soldier.
+        soldier = Ant((1, 0), SOLDIER, 0)
+        enemyWorker = Ant((2, 0), WORKER, 1)
+        gameState.board[1][0] = soldier
+        gameState.board[2][0] = enemyWorker
+        gameState.inventories[0].ants.append(soldier)
+        gameState.inventories[1].ants.append(enemyWorker)
+
+        # Calculations below.
+
+        # toRet = 0
+        # One soldier, toRet = toRet + (WEIGHT * 0.2) = 2.
+        # Dist to enemy worker is 1, dist to enemy tunnel is 10.
+        # toRet = toRet + (1 / (1 + (WEIGHT * 0.2))) + (1 / (10 + (WEIGHT * 0.5))) = 12/5
+        # toRet = toRet + (1 / (1 + 1)) + (1 / (1 + 1)) = 17/5
+
+        # toRet = 1 - (1 / (toRet + 1)) = 17/22
+        # if toRet <= 0:
+        #     toRet = 0.01
+        # if toRet >= 1:
+        #     toRet = 0.99
+        #
+        # if toRet == 0.5:
+        #     toRet = 0
+        # elif toRet > 0.5:
+        #     toRet = (2 * toRet) - 1 = 6/11
+        # elif toRet < 0.5:
+        #     toRet = -(1 - (2 * toRet))
+        self.assertAlmostEqual(player.utility(gameState), 6/11)
 
 
 if __name__ == '__main__':
