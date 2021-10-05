@@ -1,8 +1,8 @@
 ##
-# NotSoRandom Agent for HW 2B
+# MiniMaxing Agent for HW 3
 # CS 421
 #
-# Authors: Geryl Vinoya and Linda Nguyen
+# Authors: Geryl Vinoya and Samuel Nguyen
 ##
 import random
 import sys
@@ -16,7 +16,7 @@ from Move import Move
 from GameState import *
 from AIPlayerUtils import *
 from typing import Dict, List
-from math import inf
+import unittest
 
 ##
 #AIPlayer
@@ -37,7 +37,7 @@ class AIPlayer(Player):
     #   cpy           - whether the player is a copy (when playing itself)
     ##
     def __init__(self, inputPlayerId):
-        super(AIPlayer,self).__init__(inputPlayerId, "MiniMaxing")
+        super(AIPlayer,self).__init__(inputPlayerId, "MiniMaxing_vinoya21_nguyens22")
         
     
     ##
@@ -104,38 +104,46 @@ class AIPlayer(Player):
     #Return: The Move to be made
     ##
     def getMove(self, currentState):
-        # create a node object with a move, current state, eval, parent,
-        #   children, minimax value
-        #   may need to eventually add in a part for alpha-beta pruning
+
+        # create a root node object with a move, current state, eval, parent
         root = {
             "move": None,
             "state": currentState,
-            "evaluation": 0.0,
+            "evaluation": self.utility(currentState),
             "parent": None
         }
 
-        return self.getMiniMaxMove(root, 0, True, -inf, inf)
+        return self.getMiniMaxMove(root, 0, True, -100, 100)
 
+    ##
+    #getMiniMaxMove
+    #Description: Recursively gets the best minimax move at depth 2
+    #
+    #Parameters:
+    #   currentNode - the current node being worked on
+    #   currentDepth - the current depth 
+    #   myTurn - boolean if it is the AIPlayer's turn or not
+    #   alpha - alpha value for pruning
+    #   beta - beta value for pruning
+    #
+    #Return: The Move to be made
+    ##
     def getMiniMaxMove (self, currentNode, currentDepth, myTurn, alpha, beta):
-        
-        maxDepth = 3
+        maxDepth = 2 #the max depth for the minimax tree
 
+        #get the current node's eval and state to be used later
         currNodeEval = currentNode.get("evaluation")
-        currState = currentNode.get("state")
+        currentState = currentNode.get("state")
 
-        #if currentDepth == maxDepth or currNodeEval == -1 or currNodeEval == 1:
-        #    return currNodeEval
+        #if we are at max depth or at a win/loss, return the eval number
+        if currentDepth == maxDepth or currNodeEval == -1 or currNodeEval == 1:
+            return currNodeEval
 
-        if currentDepth == maxDepth or abs(currNodeEval) == 1.0:
-            score_multiplier = 1 if myTurn else -1
-            return currNodeEval * score_multiplier
-
+        #create a list of children nodes for the current node
         children = []
-        legalMoves = listAllLegalMoves(currState)
+        legalMoves = listAllLegalMoves(currentState)
         for move in legalMoves:
-
-            newState = self.getNextStateAdversarial(currState, move)
-
+            newState = getNextStateAdversarial(currentState, move)
             node = {
                 "move": move,
                 "state": newState,
@@ -144,57 +152,65 @@ class AIPlayer(Player):
             }
             children.append(node)
 
+        #sort the children in descending order and only pick the highest 2
         children = sorted(children, key=lambda child: child.get("evaluation"), reverse=True)
+        children = children[:2]
 
-        #only take the highest 2 nodes
-        children = children[:3]
-
+        #create a list of nodes that have an end move type
         endNodes = []
-
         for node in children:
             endNodes.append(self.getEndNode(node))
 
-        #if this is the root node, then it is our turn and we will recursively get the
+        #now we have all the information we need, recursion will start below    
+        #   if this is the root node, then it is our turn and we will recursively get the
         #   move with the best eval
         if currentDepth == 0:
             for node in endNodes:
-                node["evaluation"] = self.getMiniMaxMove(node, 1, False, -1000, 1000)
+                node["evaluation"] = self.getMiniMaxMove(node, 1, False, -10, 10)
         
             best = max(endNodes, key=lambda node: node.get("evaluation"))
-            while best.get("parent") is not None:
+            while best.get("parent"):
                 best = best.get("parent")
             
             return best.get("move")
         
+        #if this is not the root node, then we travel through the tree
+        #   and evaluate the values while performing alpha-beta pruning
         else:
             if myTurn:
-                maxScore = -inf
+                #set to an arbitrary "low" number to compare the high score to get the highest score
+                maxScore = -10
+
+                #continue to recurse through the endNodes to find the best move and change playerturn
                 for node in endNodes:
                     miniMaxScore = self.getMiniMaxMove(node, currentDepth + 1, False, alpha, beta)
-                    maxScore = max(maxScore, miniMaxScore)
+                    if miniMaxScore > maxScore: 
+                        maxScore = miniMaxScore
+                    if maxScore > alpha:
+                        alpha = maxScore
 
-                    alpha = max(alpha, maxScore)
-
+                    #check if we can prune
                     if beta <= alpha:
                         break
-
                 return maxScore
             
             else:
-                minScore = inf
+                #set to an arbitrary "high" number to compare the high score to get the lowest score
+                minScore = 10
+
+                #continue to recurse through the endNodes to find the best move and change playerturn
                 for node in endNodes:
                     miniMaxScore = self.getMiniMaxMove(node, currentDepth + 1, True, alpha, beta)
-                    minScore = min(minScore, miniMaxScore)
-
-                    beta = min(beta, minScore)
-
+                    if miniMaxScore < minScore:
+                        minScore = miniMaxScore
+                    if minScore < beta:
+                        beta = minScore
+                
+                    #check if we can prune
                     if beta <= alpha:
                         break
 
                 return minScore
-
-
-
 
     ##
     #getEndNode
@@ -206,33 +222,31 @@ class AIPlayer(Player):
     #Return: The Move to be made
     ##
     def getEndNode(self, currentNode):
+
+        #base case
+        #   if we find a node that is an end type return that node
         currentMove = currentNode.get("move")
         if currentMove.moveType == END:
             return currentNode
 
         currentState = currentNode.get("state")
 
+        #create list of children of the current node
         children = []
         legalMoves = listAllLegalMoves(currentState)
         for move in legalMoves:
-            newState = self.getNextStateAdversarial(currentState, move)
-
+            newState = getNextStateAdversarial(currentState, move)
             node = {
                 "move": move,
                 "state": newState,
                 "evaluation": self.utility(newState),
-                "parent": None,
+                "parent": currentNode,
             }
             children.append(node)
-
-        bestChild = max(children, key=lambda n: n.get("evaluation"))
-
-        bestChild["parent"] = currentNode
-
+        #find the best child and return it
+        bestChild = max(children, key=lambda node: node.get("evaluation"))
         return self.getEndNode(bestChild)
 
-
-    
     ##
     #getAttack
     #Description: Gets the attack to be made from the Player
@@ -269,13 +283,6 @@ class AIPlayer(Player):
     #Return: the "guess" of how good the game state is
     ##
     def utility(self, currentState):
-
-
-        if getWinner(currentState) == 1:
-            return 1.0
-        elif getWinner(currentState) == 0:
-            return -1.0
-
         WEIGHT = 10 #weight value for moves
 
         #will modify this toRet value based off of gamestate
@@ -356,106 +363,147 @@ class AIPlayer(Player):
         foodCount = currentState.inventories[me].foodCount
         toRet = toRet + foodCount
 
-        #convert the previous score of [0,1] to [-1, 1]
+        #set the correct bounds for the toRet
         toRet = 1 - (1 / (toRet + 1))
         if toRet <= 0:
             toRet = 0.01
         if toRet >= 1:
             toRet = 0.99
 
-        if toRet > 0.5:
+        #convert the previous score of [0,1] to [-1, 1]
+        if toRet == 0.5:
+            toRet = 0
+        elif toRet > 0.5:
             toRet = (2 * toRet) - 1
         elif toRet < 0.5:
             toRet = -(1 - (2 * toRet))
+
         return toRet
 
-    def getNextStateAdversarial(self, current_state: GameState, move):
-        """
-        get_next_state_adversarial
-        Citation: Made modification that Nux suggested via email (copied from this email).
-        This is the same as getNextState (above) except that it properly
-        updates the hasMoved property on ants and the END move is processed correctly.
-        :param current_state: A clone of the current state (GameState)
-        :param move: The move that the agent would take (Move).
-        :return: A clone of what the state would look like if the move was made.
-        """
-        # variables I will need
-        next_state = getNextState(current_state, move)
-        my_inventory = getCurrPlayerInventory(next_state)
-        my_ants = my_inventory.ants
+class TestCreateNode(unittest.TestCase):
+    # Queens, anthills, and tunnels only.
+    def test_utility(self):
+        player = AIPlayer(0)
 
-        # If an ant is moved update their coordinates and has moved
-        if move.moveType == MOVE_ANT:
-            # startingCoord = move.coordList[0]
-            starting_coord = move.coordList[len(move.coordList) - 1]
-            for ant in my_ants:
-                if ant.coords == starting_coord:
-                    ant.hasMoved = True
-        elif move.moveType == END:
-            for ant in my_ants:
-                ant.hasMoved = False
-            next_state.whoseTurn = 1 - current_state.whoseTurn
-        return next_state
-##
-############ UNIT TESTS ###########################
-##
+        # Create game state with food.
+        gameState = GameState.getBasicState()
+        p1Food1 = Building((1, 1), FOOD, 0)
+        p1Food2 = Building((2, 2), FOOD, 0)
+        gameState.board[1][1] = p1Food1
+        gameState.board[2][2] = p1Food2
+        gameState.inventories[2].constrs += [p1Food1, p1Food2]
+        p1Food1 = Building((7, 7), FOOD, 1)
+        p1Food2 = Building((8, 8), FOOD, 1)
+        gameState.board[7][7] = p1Food1
+        gameState.board[8][8] = p1Food2
+        gameState.inventories[2].constrs += [p1Food1, p1Food2]
 
-#test if utility method returns 0.5 at start of a fresh game
-test1 = GameState.getBasicState()
-testAI = AIPlayer(0)
+        # Calculations below.
 
-#set food for both players to 0
-test1.inventories[0].foodCount = 0
-test1.inventories[1].foodCount = 0
+        # toRet = 0
+        # toRet = 1 - (1 / (toRet + 1)) = 1
+        # if toRet <= 0:
+        #     toRet = 0.01 = 0.01
+        # if toRet >= 1:
+        #     toRet = 0.99
+        #
+        # if toRet == 0.5:
+        #     toRet = 0
+        # elif toRet > 0.5:
+        #     toRet = (2 * toRet) - 1
+        # elif toRet < 0.5:
+        #     toRet = -(1 - (2 * toRet)) = -0.98
+        self.assertEqual(player.utility(gameState), -0.98)
 
-#anthill health are at 3
-anthill0 = Construction((0,0), ANTHILL)
-anthill0.health = 3
-anthill1 = Construction((5,5), ANTHILL)
-anthill1.health = 3
+    # Same as above, but with workers.
+    def test_utility2(self):
+        player = AIPlayer(0)
 
-#set coords for food
-food0 = Construction((6,2), FOOD)
-food1 = Construction((6,7), FOOD)
-test1.board[3][2].constr = food0
-test1.board[6][7].constr = food1
-test1.inventories[0].constrs.append(food0)
-test1.inventories[1].constrs.append(food1)
+        # Create game state with food.
+        gameState = GameState.getBasicState()
+        p1Food1 = Building((1, 1), FOOD, 0)
+        p1Food2 = Building((2, 2), FOOD, 0)
+        gameState.board[1][1] = p1Food1
+        gameState.board[2][2] = p1Food2
+        gameState.inventories[2].constrs += [p1Food1, p1Food2]
+        p1Food1 = Building((7, 7), FOOD, 1)
+        p1Food2 = Building((8, 8), FOOD, 1)
+        gameState.board[7][7] = p1Food1
+        gameState.board[8][8] = p1Food2
+        gameState.inventories[2].constrs += [p1Food1, p1Food2]
 
-#create tunnel for player 0
-tunnel0 = Construction((8,6), TUNNEL)
+        # Add worker.
+        worker = Ant((1, 0), WORKER, 0)
+        gameState.board[1][0] = worker
+        gameState.inventories[0].ants.append(worker)
 
-#create tunnel for player 1
-tunnel1 = Construction((0,5), TUNNEL)
+        # Calculations below.
 
-#create a worker
-worker = Ant((7,2), WORKER, 0)
-test1.inventories[0].ants.append(worker)
-workers = getAntList(test1, 0, (WORKER,))
+        # toRet = 0
+        # Dist from closer food is 1, toRet = toRet + (1 / (foodDist + (4 * WEIGHT))) = 1/41.
+        # toRet = toRet + (2 / WEIGHT) = 46/205
 
-#create enemy worker
-worker = Ant((3,3), WORKER, 1)
-test1.inventories[1].ants.append(worker)
-enemyWorkers = getAntList(test1, 1, (WORKER,))
+        # toRet = 1 - (1 / (toRet + 1)) = 46/251
+        # if toRet <= 0:
+        #     toRet = 0.01
+        # if toRet >= 1:
+        #     toRet = 0.99
+        #
+        # if toRet == 0.5:
+        #     toRet = 0
+        # elif toRet > 0.5:
+        #     toRet = (2 * toRet) - 1
+        # elif toRet < 0.5:
+        #     toRet = -(1 - (2 * toRet)) = -159/251
 
-#create a drone
-drone = Ant((0,3), DRONE, 0)
-test1.inventories[0].ants.append(drone)
-drones = getAntList(test1, 0, (DRONE,))
+        # Help from https://stackoverflow.com/questions/33199548/how-to-perform-unittest-for-floating-point-outputs-python
+        # assertAlmostEqual exists.
+        self.assertAlmostEqual(player.utility(gameState), -159/251)
 
-#set queen health to 10
-queen0 = Ant((0,0), QUEEN, 0)
-queen0.health = 10
-queen1 = Ant((5,5), QUEEN, 1)
-queen1.health = 10
+    # Testing soldier parts.
+    def test_utility3(self):
+        player = AIPlayer(0)
 
-test1.board[0][0].ant = queen0
-test1.board[5][5].ant = queen1
+        # Create game state with food.
+        gameState = GameState.getBasicState()
+        p1Food1 = Building((1, 1), FOOD, 0)
+        p1Food2 = Building((2, 2), FOOD, 0)
+        gameState.board[1][1] = p1Food1
+        gameState.board[2][2] = p1Food2
+        gameState.inventories[2].constrs += [p1Food1, p1Food2]
+        p1Food1 = Building((7, 7), FOOD, 1)
+        p1Food2 = Building((8, 8), FOOD, 1)
+        gameState.board[7][7] = p1Food1
+        gameState.board[8][8] = p1Food2
+        gameState.inventories[2].constrs += [p1Food1, p1Food2]
 
-#test if utility is 0.5 at the start of a game
-#if(testAI.utility(test1) != -0.6653322658126501):
-    #print("Utility is", testAI.utility(test1), "when should be 0.5 at the start of the game")
+        # Add soldier.
+        soldier = Ant((1, 0), SOLDIER, 0)
+        gameState.board[1][0] = soldier
+        gameState.inventories[0].ants.append(soldier)
+
+        # Calculations below.
+
+        # toRet = 0
+        # toRet = toRet + (WEIGHT * 0.2) = .2
+        # No workers, toRet = toRet + (2 * WEIGHT) = 22.
+        # Dist to enemy queen is 17, toRet = toRet + (1 / (1 + 17)) = 397/18.
+        # No enemy workers, toRet = toRet + (1 / (0 + 1)) + (1 / (1 + 1)) = 212/9.
+
+        # toRet = 1 - (1 / (toRet + 1)) = 212/221
+        # if toRet <= 0:
+        #     toRet = 0.01
+        # if toRet >= 1:
+        #     toRet = 0.99
+        #
+        # if toRet == 0.5:
+        #     toRet = 0
+        # elif toRet > 0.5:
+        #     toRet = (2 * toRet) - 1 = 203/221
+        # elif toRet < 0.5:
+        #     toRet = -(1 - (2 * toRet))
+        self.assertAlmostEqual(player.utility(gameState), 203/221)
 
 
-
-
+if __name__ == '__main__':
+    unittest.main()
