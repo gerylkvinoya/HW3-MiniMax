@@ -2,7 +2,7 @@
 # NotSoRandom Agent for HW 2B
 # CS 421
 #
-# Authors: Geryl Vinoya and Linda Nguyen
+# Authors: Geryl Vinoya and Samuel Nguyen
 ##
 import random
 import sys
@@ -17,6 +17,7 @@ from GameState import *
 from AIPlayerUtils import *
 from typing import Dict, List
 from math import inf
+import unittest
 
 ##
 #AIPlayer
@@ -358,62 +359,131 @@ class AIPlayer(Player):
 
         return toRet
 
-##
-############ UNIT TESTS ###########################
-##
 
-#test if utility method returns 0.5 at start of a fresh game
-test1 = GameState.getBasicState()
-testAI = AIPlayer(0)
+class TestCreateNode(unittest.TestCase):
+    # Queens, anthills, and tunnels only.
+    def test_utility(self):
+        player = AIPlayer(0)
 
-#set food for both players to 0
-test1.inventories[0].foodCount = 0
-test1.inventories[1].foodCount = 0
+        # Create game state with food.
+        gameState = GameState.getBasicState()
+        p1Food1 = Building((1, 1), FOOD, 0)
+        p1Food2 = Building((2, 2), FOOD, 0)
+        gameState.board[1][1] = p1Food1
+        gameState.board[2][2] = p1Food2
+        gameState.inventories[2].constrs += [p1Food1, p1Food2]
+        p1Food1 = Building((7, 7), FOOD, 1)
+        p1Food2 = Building((8, 8), FOOD, 1)
+        gameState.board[7][7] = p1Food1
+        gameState.board[8][8] = p1Food2
+        gameState.inventories[2].constrs += [p1Food1, p1Food2]
 
-#anthill health are at 3
-anthill0 = Construction((0,0), ANTHILL)
-anthill0.health = 3
-anthill1 = Construction((5,5), ANTHILL)
-anthill1.health = 3
+        # Calculations below.
 
-#set coords for food
-food0 = Construction((6,2), FOOD)
-food1 = Construction((6,7), FOOD)
-test1.board[3][2].constr = food0
-test1.board[6][7].constr = food1
-test1.inventories[0].constrs.append(food0)
-test1.inventories[1].constrs.append(food1)
+        # toRet = 0
+        # toRet = 1 - (1 / (toRet + 1)) = 1
+        # if toRet <= 0:
+        #     toRet = 0.01 = 0.01
+        # if toRet >= 1:
+        #     toRet = 0.99
+        #
+        # if toRet == 0.5:
+        #     toRet = 0
+        # elif toRet > 0.5:
+        #     toRet = (2 * toRet) - 1
+        # elif toRet < 0.5:
+        #     toRet = -(1 - (2 * toRet)) = -0.98
+        self.assertEqual(player.utility(gameState), -0.98)
 
-#create tunnel for player 0
-tunnel0 = Construction((8,6), TUNNEL)
+    # Same as above, but with workers.
+    def test_utility2(self):
+        player = AIPlayer(0)
 
-#create tunnel for player 1
-tunnel1 = Construction((0,5), TUNNEL)
+        # Create game state with food.
+        gameState = GameState.getBasicState()
+        p1Food1 = Building((1, 1), FOOD, 0)
+        p1Food2 = Building((2, 2), FOOD, 0)
+        gameState.board[1][1] = p1Food1
+        gameState.board[2][2] = p1Food2
+        gameState.inventories[2].constrs += [p1Food1, p1Food2]
+        p1Food1 = Building((7, 7), FOOD, 1)
+        p1Food2 = Building((8, 8), FOOD, 1)
+        gameState.board[7][7] = p1Food1
+        gameState.board[8][8] = p1Food2
+        gameState.inventories[2].constrs += [p1Food1, p1Food2]
 
-#create a worker
-worker = Ant((7,2), WORKER, 0)
-test1.inventories[0].ants.append(worker)
-workers = getAntList(test1, 0, (WORKER,))
+        # Add worker.
+        worker = Ant((1, 0), WORKER, 0)
+        gameState.board[1][0] = worker
+        gameState.inventories[0].ants.append(worker)
 
-#create enemy worker
-worker = Ant((3,3), WORKER, 1)
-test1.inventories[1].ants.append(worker)
-enemyWorkers = getAntList(test1, 1, (WORKER,))
+        # Calculations below.
 
-#create a drone
-drone = Ant((0,3), DRONE, 0)
-test1.inventories[0].ants.append(drone)
-drones = getAntList(test1, 0, (DRONE,))
+        # toRet = 0
+        # Dist from closer food is 1, toRet = toRet + (1 / (foodDist + (4 * WEIGHT))) = 1/41.
+        # toRet = toRet + (2 / WEIGHT) = 46/205
 
-#set queen health to 10
-queen0 = Ant((0,0), QUEEN, 0)
-queen0.health = 10
-queen1 = Ant((5,5), QUEEN, 1)
-queen1.health = 10
+        # toRet = 1 - (1 / (toRet + 1)) = 46/251
+        # if toRet <= 0:
+        #     toRet = 0.01
+        # if toRet >= 1:
+        #     toRet = 0.99
+        #
+        # if toRet == 0.5:
+        #     toRet = 0
+        # elif toRet > 0.5:
+        #     toRet = (2 * toRet) - 1
+        # elif toRet < 0.5:
+        #     toRet = -(1 - (2 * toRet)) = -159/251
 
-test1.board[0][0].ant = queen0
-test1.board[5][5].ant = queen1
+        # Help from https://stackoverflow.com/questions/33199548/how-to-perform-unittest-for-floating-point-outputs-python
+        # assertAlmostEqual exists.
+        self.assertAlmostEqual(player.utility(gameState), -159/251)
 
-#test if utility is 0.5 at the start of a game
-if(testAI.utility(test1) != -0.6653322658126501):
-    print("Utility is", testAI.utility(test1), "when should be 0.5 at the start of the game")
+    # Testing soldier parts.
+    def test_utility3(self):
+        player = AIPlayer(0)
+
+        # Create game state with food.
+        gameState = GameState.getBasicState()
+        p1Food1 = Building((1, 1), FOOD, 0)
+        p1Food2 = Building((2, 2), FOOD, 0)
+        gameState.board[1][1] = p1Food1
+        gameState.board[2][2] = p1Food2
+        gameState.inventories[2].constrs += [p1Food1, p1Food2]
+        p1Food1 = Building((7, 7), FOOD, 1)
+        p1Food2 = Building((8, 8), FOOD, 1)
+        gameState.board[7][7] = p1Food1
+        gameState.board[8][8] = p1Food2
+        gameState.inventories[2].constrs += [p1Food1, p1Food2]
+
+        # Add soldier.
+        soldier = Ant((1, 0), SOLDIER, 0)
+        gameState.board[1][0] = soldier
+        gameState.inventories[0].ants.append(soldier)
+
+        # Calculations below.
+
+        # toRet = 0
+        # toRet = toRet + (WEIGHT * 0.2) = .2
+        # No workers, toRet = toRet + (2 * WEIGHT) = 22.
+        # Dist to enemy queen is 17, toRet = toRet + (1 / (1 + 17)) = 397/18.
+        # No enemy workers, toRet = toRet + (1 / (0 + 1)) + (1 / (1 + 1)) = 212/9.
+
+        # toRet = 1 - (1 / (toRet + 1)) = 212/221
+        # if toRet <= 0:
+        #     toRet = 0.01
+        # if toRet >= 1:
+        #     toRet = 0.99
+        #
+        # if toRet == 0.5:
+        #     toRet = 0
+        # elif toRet > 0.5:
+        #     toRet = (2 * toRet) - 1 = 203/221
+        # elif toRet < 0.5:
+        #     toRet = -(1 - (2 * toRet))
+        self.assertAlmostEqual(player.utility(gameState), 203/221)
+
+
+if __name__ == '__main__':
+    unittest.main()
