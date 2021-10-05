@@ -380,6 +380,7 @@ class AIPlayer(Player):
 
         return toRet
 
+
 class TestCreateNode(unittest.TestCase):
     # Queens, anthills, and tunnels only.
     def test_utility_basic(self):
@@ -432,7 +433,6 @@ class TestCreateNode(unittest.TestCase):
         # toRet = 0
         # Dist from closer food is 1, toRet = toRet + (1 / (foodDist + (4 * WEIGHT))) = 1/41.
         # toRet = toRet + (2 / WEIGHT) = 46/205
-
         # toRet = 1 - (1 / (toRet + 1)) = 46/251
         # if toRet <= 0:
         #     toRet = 0.01
@@ -469,7 +469,6 @@ class TestCreateNode(unittest.TestCase):
         # No workers, toRet = toRet + (2 * WEIGHT) = 22.
         # Dist to enemy queen is 17, toRet = toRet + (1 / (1 + 17)) = 397/18.
         # No enemy workers, toRet = toRet + (1 / (0 + 1)) + (1 / (1 + 1)) = 212/9.
-
         # toRet = 1 - (1 / (toRet + 1)) = 212/221
         # if toRet <= 0:
         #     toRet = 0.01
@@ -491,7 +490,7 @@ class TestCreateNode(unittest.TestCase):
         # Create game state.
         gameState = GameState.getBasicState()
 
-        # Add soldier.
+        # Add soldier and enemy worker.
         soldier = Ant((1, 0), SOLDIER, 0)
         enemyWorker = Ant((2, 0), WORKER, 1)
         gameState.board[1][0] = soldier
@@ -506,7 +505,6 @@ class TestCreateNode(unittest.TestCase):
         # Dist to enemy worker is 1, dist to enemy tunnel is 10.
         # toRet = toRet + (1 / (1 + (WEIGHT * 0.2))) + (1 / (10 + (WEIGHT * 0.5))) = 12/5
         # toRet = toRet + (1 / (1 + 1)) + (1 / (1 + 1)) = 17/5
-
         # toRet = 1 - (1 / (toRet + 1)) = 17/22
         # if toRet <= 0:
         #     toRet = 0.01
