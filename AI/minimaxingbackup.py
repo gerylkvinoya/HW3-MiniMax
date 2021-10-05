@@ -114,31 +114,19 @@ class AIPlayer(Player):
             "parent": None
         }
 
-        return self.getMiniMaxMove(root, 0, True, -inf, inf)
+        return self.getMiniMaxMove(root, 0, 3, True, -inf, inf)
 
-    def getMiniMaxMove (self, currentNode, currentDepth, myTurn, alpha, beta):
-        
-        maxDepth = 2
+    def getMiniMaxMove(self, currentNode, currentDepth, maxDepth, isMyTurn, alpha, beta):
 
         currNodeEval = currentNode.get("evaluation")
         currentState = currentNode.get("state")
 
+        # Return eval if at max depth.
         if currentDepth == maxDepth or currNodeEval == -1 or currNodeEval == 1:
             return currNodeEval
 
-        children = []
-        legalMoves = listAllLegalMoves(currentState)
-        for move in legalMoves:
-            newState = getNextStateAdversarial(currentState, move)
-
-            node = {
-                "move": move,
-                "state": newState,
-                "evaluation": self.utility(newState),
-                "parent": None,
-            }
-            children.append(node)
-
+        # Get all moves that can be made from current state and sort them.
+        children = self.expandNode(currentNode)
         children = sorted(children, key=lambda child: child.get("evaluation"), reverse=True)
 
         #only take the highest 2 nodes
@@ -153,7 +141,7 @@ class AIPlayer(Player):
         #   move with the best eval
         if currentDepth == 0:
             for node in endNodes:
-                node["evaluation"] = self.getMiniMaxMove(node, 1, False, -1000, 1000)
+                node["evaluation"] = self.getMiniMaxMove(node, 1, 3, False, -1000, 1000)
         
             best = max(endNodes, key=lambda node: node.get("evaluation"))
             while best.get("parent") is not None:
@@ -162,10 +150,10 @@ class AIPlayer(Player):
             return best.get("move")
         
         else:
-            if myTurn:
+            if isMyTurn:
                 maxScore = -inf
                 for node in endNodes:
-                    miniMaxScore = self.getMiniMaxMove(node, currentDepth + 1, False, alpha, beta)
+                    miniMaxScore = self.getMiniMaxMove(node, currentDepth + 1, 3, False, alpha, beta)
                     maxScore = max(maxScore, miniMaxScore)
 
                     alpha = max(alpha, maxScore)
@@ -178,7 +166,7 @@ class AIPlayer(Player):
             else:
                 minScore = inf
                 for node in endNodes:
-                    miniMaxScore = self.getMiniMaxMove(node, currentDepth + 1, True, alpha, beta)
+                    miniMaxScore = self.getMiniMaxMove(node, currentDepth + 1, 3, True, alpha, beta)
                     minScore = min(minScore, miniMaxScore)
 
                     beta = min(beta, minScore)
@@ -188,9 +176,6 @@ class AIPlayer(Player):
 
                 return minScore
 
-
-
-
     ##
     #getEndNode
     #Description: Recursively finds the highest scoring end node
@@ -198,7 +183,7 @@ class AIPlayer(Player):
     #Parameters:
     #   currentNode - node to find
     #
-    #Return: The Move to be made
+    #Return: The end node with the best value.
     ##
     def getEndNode(self, currentNode):
         currentMove = currentNode.get("move")
@@ -207,25 +192,36 @@ class AIPlayer(Player):
 
         currentState = currentNode.get("state")
 
-        children = []
-        legalMoves = listAllLegalMoves(currentState)
-        for move in legalMoves:
-            newState = getNextStateAdversarial(currentState, move)
-
-            node = {
-                "move": move,
-                "state": newState,
-                "evaluation": self.utility(newState),
-                "parent": currentNode,
-            }
-            children.append(node)
+        children = self.expandNode(currentNode)
 
         bestChild = max(children, key=lambda node: node.get("evaluation"))
 
         return self.getEndNode(bestChild)
 
+    ##
+    # expandNode
+    # Description: Gets a list of nodes corresponding to moves made from the given node's state.
+    #
+    # Parameters:
+    #   node: the current node.
+    #
+    # Return: the list of nodes.
+    ##
+    def expandNode(self, node):
+        moves = listAllLegalMoves(node["state"])
+        nodes = []
 
-    
+        for move in moves:
+            state = getNextStateAdversarial(node['state'], move)
+            newNode = {
+                "move": move,
+                "state": state,
+                "evaluation": self.utility(state),
+                "parent": node,
+            }
+            nodes.append(newNode)
+
+        return nodes
     ##
     #getAttack
     #Description: Gets the attack to be made from the Player
